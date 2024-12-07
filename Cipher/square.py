@@ -1,8 +1,10 @@
 # Constants
 ROUNDS = 8  # Number of rounds
 ROOT = 0x1f5  # Generator of GF(2^8)
+C_X = [0x02, 0x03, 0x01, 0x01]  # Polynomial coefficients for µ
+INV_C_X = [0x0E, 0x09, 0x0D, 0x0B]  # Polynomial coefficients for µ⁻¹
+ROUND_CONSTANTS = [1 << i for i in range(ROUNDS)]  # Round constants
 
-# Updated S-box in hex
 sbox = [
     0xc6, 0x37, 0x87, 0x47, 0xdf, 0x46, 0x06, 0xac, 0xf3, 0xe0, 0x86, 0x42, 0x1f, 0x8d, 0x4a, 0x97,
     0x5c, 0xd8, 0x6c, 0x27, 0x5f, 0x65, 0x84, 0xff, 0x2a, 0xbd, 0xda, 0x0a, 0x39, 0xba, 0xd7, 0xfc,
@@ -22,101 +24,176 @@ sbox = [
     0x38, 0xea, 0x68, 0x20, 0x0b, 0x9e, 0xd4, 0x76, 0xe4, 0x69, 0x22, 0x00, 0xfb, 0xb5, 0x4b, 0x91
 ]
 
-def times2(n):
-    """Multiply by 2 in GF(2^8)"""
-    n = n << 1
-    if (n & 0x100) != 0:
-        n ^= ROOT
-    return n
+inv_sbox = [
+    0xFB, 0xCB, 0x4E, 0x25, 0x92, 0x84, 0x06, 0x6B, 0x73, 0x6E, 0x1B, 0xF4, 0x5F, 0xEF, 0x61, 0x7D,
+    0xD7, 0xE9, 0xC3, 0xD1, 0xB6, 0x9D, 0x45, 0x8A, 0xE6, 0xDF, 0xBE, 0x5A, 0xEC, 0x9C, 0x99, 0x0C,
+    0xF3, 0xDE, 0xFA, 0x8B, 0x65, 0x8D, 0xB3, 0x13, 0xB4, 0x75, 0x18, 0xCD, 0x80, 0xC9, 0x53, 0x21,
+    0x81, 0xC4, 0x42, 0x6D, 0x5D, 0xA7, 0xB8, 0x01, 0xF0, 0x1C, 0xAA, 0x78, 0x27, 0x93, 0x83, 0x55,
+    0x9E, 0x44, 0x0B, 0x49, 0xCC, 0x57, 0x05, 0x03, 0xCE, 0xE8, 0x0E, 0xFE, 0x59, 0x9F, 0x3C, 0x63,
+    0xA3, 0x43, 0x95, 0xA2, 0x5C, 0x46, 0x58, 0xBD, 0xCF, 0x37, 0x62, 0xC0, 0x10, 0x7A, 0xBB, 0x14,
+    0x40, 0x8E, 0x4C, 0x5B, 0xA4, 0x15, 0xE4, 0xAF, 0xF2, 0xF9, 0xB7, 0xDB, 0x12, 0xE5, 0xEB, 0x69,
+    0xBF, 0x34, 0xEE, 0x76, 0xD4, 0x5E, 0xF7, 0xC1, 0x97, 0xE2, 0x6F, 0x9A, 0xB1, 0x2D, 0xC8, 0xE1,
+    0x38, 0x87, 0x3D, 0xB2, 0x16, 0xDA, 0x0A, 0x02, 0xEA, 0x85, 0x89, 0x20, 0x31, 0x0D, 0xB0, 0x26,
+    0xA5, 0xFF, 0x23, 0x24, 0x98, 0xB9, 0xD3, 0x0F, 0xDC, 0x35, 0xC5, 0x79, 0xC7, 0x4A, 0xF5, 0xD6,
+    0x36, 0x2F, 0xC2, 0xD9, 0x68, 0xED, 0xBC, 0x3F, 0x67, 0xAD, 0x29, 0xD2, 0x07, 0xB5, 0x2A, 0x77,
+    0x30, 0x9B, 0xA6, 0x28, 0x86, 0xFD, 0x8C, 0xCA, 0x4F, 0xE7, 0x1D, 0xC6, 0x88, 0x19, 0xAE, 0xBA,
+    0xD5, 0x82, 0x32, 0x66, 0x64, 0x50, 0x00, 0x8F, 0x41, 0x22, 0x71, 0x4B, 0x33, 0xA9, 0x4D, 0x7E,
+    0x6A, 0x39, 0x94, 0xA1, 0xF6, 0x48, 0xAB, 0x1E, 0x11, 0x74, 0x1A, 0x3E, 0xA8, 0x7F, 0x3B, 0x04,
+    0x09, 0xE3, 0x7B, 0x2E, 0xF8, 0x70, 0xD8, 0x2C, 0x91, 0xAC, 0xF1, 0x56, 0xDD, 0x51, 0xE0, 0x2B,
+    0x52, 0x7C, 0x54, 0x08, 0x72, 0x6C, 0x90, 0xD0, 0x3A, 0x96, 0x47, 0xFC, 0x1F, 0x60, 0xA0, 0x17]
 
-def print_matrix(matrix):
-    """Print matrix in 4x4 form for better visualization in hex"""
+def gf_mult(a, b):
+    """Multiply two elements in GF(2^8)."""
+    result = 0
+    for _ in range(8):
+        if b & 1:
+            result ^= a
+        high_bit = a & 0x80
+        a = (a << 1) & 0xFF
+        if high_bit:
+            a ^= ROOT
+        b >>= 1
+    return result
+
+def matrix_mult(state, coefficients):
+    """Helper function for µ and µ⁻¹: Multiply state rows with coefficients in GF(2^8)."""
+    new_state = [[0] * 4 for _ in range(4)]
     for i in range(4):
-        print(f"{' '.join(f'{matrix[i*4 + j]:02X}' for j in range(4))}")
+        for j in range(4):
+            new_state[i][j] = sum(
+                gf_mult(coefficients[k], state[i][(j - k) % 4]) for k in range(4)
+            ) % 256
+    return new_state
 
-def gamma(matrix):
-    """Gamma function: Substitute bytes using sbox"""
-    for i in range(16):
-        matrix[i] = sbox[matrix[i]]
+def mu(state):
+    """Apply the µ transformation to the state."""
+    return matrix_mult(state, C_X)
 
-def pi(matrix):
-    """Pi function: Simple transpose"""
-    temp = matrix[1]
-    matrix[1] = matrix[4]
-    matrix[4] = temp
-    temp = matrix[2]
-    matrix[2] = matrix[8]
-    matrix[8] = temp
-    temp = matrix[6]
-    matrix[6] = matrix[9]
-    matrix[9] = temp
-    temp = matrix[3]
-    matrix[3] = matrix[0xC]
-    matrix[0xC] = temp
-    temp = matrix[7]
-    matrix[7] = matrix[0xD]
-    matrix[0xD] = temp
-    temp = matrix[0xB]
-    matrix[0xB] = matrix[0xE]
-    matrix[0xE] = temp
+def inv_mu(state):
+    """Apply the µ⁻¹ transformation to the state."""
+    return matrix_mult(state, INV_C_X)
 
-def sigma(matrix, round_key):
-    """Sigma function: XOR matrix with round key"""
-    for i in range(16):
-        matrix[i] ^= round_key[i]
+def gamma(state):
+    """Apply the S-box substitution (γ)."""
+    return [[sbox[byte] for byte in row] for row in state]
 
-def key_schedule(round_key, r):
-    """Generate the next round key"""
-    temp = round_key[0xC]
-    round_key[0] ^= r
-    round_key[0] ^= round_key[0xD]
-    round_key[4] ^= round_key[0]
-    round_key[8] ^= round_key[4]
-    round_key[0xC] ^= round_key[8]
-    round_key[1] ^= round_key[0xE]
-    round_key[5] ^= round_key[1]
-    round_key[9] ^= round_key[5]
-    round_key[0xD] ^= round_key[9]
-    round_key[2] ^= round_key[0xF]
-    round_key[6] ^= round_key[2]
-    round_key[0xA] ^= round_key[6]
-    round_key[0xE] ^= round_key[0xA]
-    round_key[3] ^= round_key[0xB]
-    return round_key
+def inv_gamma(state):
+    """Apply the inverse S-box substitution (γ⁻¹)."""
+    return [[inv_sbox[byte] for byte in row] for row in state]
 
-def encrypt(plaintext):
-    """Encrypt the plaintext using a simplified version of the cipher"""
-    matrix = [int(b, 16) for b in plaintext.split()]
-    print("Start with Plaintext Matrix:")
-    print_matrix(matrix)
-    
-    round_key = [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01]
-    print("\nRound Key Matrix:")
-    print_matrix(round_key)
-    
-    for round_num in range(ROUNDS):
-        print(f"\nRound {round_num + 1}:")
+def pi(state):
+    """Transpose the state (π)."""
+    return [list(row) for row in zip(*state)]
 
-        gamma(matrix)
-        print(f"After Gamma operation:")
-        print_matrix(matrix)
+def sigma(state, round_key):
+    """XOR the state with the round key (σ)."""
+    return [[state[i][j] ^ round_key[i][j] for j in range(4)] for i in range(4)]
 
-        pi(matrix)
-        print(f"After Pi operation:")
-        print_matrix(matrix)
+def left_rotate(row):
+    """Perform a left byte rotation (rotl) on a 4-byte row."""
+    return row[1:] + row[:1]
 
-        sigma(matrix, round_key)
-        print(f"After Sigma operation:")
-        print_matrix(matrix)
+def right_rotate(row):
+    """Perform a right byte rotation (rotr) on a 4-byte row."""
+    return row[-1:] + row[:-1]
 
-        round_key = key_schedule(round_key, round_num)
-        print(f"Updated Round Key:")
-        print_matrix(round_key)
+def key_schedule(key, round_num):
+    """
+    Generate the next round key based on the current key and round number.
 
-    print("\nFinal Ciphertext:")
-    print_matrix(matrix)
-    return matrix
+    Parameters:
+    key (list of list): The current 4x4 key matrix.
+    round_num (int): The round number.
+
+    Returns:
+    list of list: The next round key as a 4x4 matrix.
+    """
+    # Initialize next key
+    next_key = [[0] * 4 for _ in range(4)]
+
+    # Handle round constant safely
+    if round_num == 0:
+        round_constant = 0  # No round constant for the initial round
+    else:
+        round_constant = (1 << (round_num - 1)) % 256
+
+    # Compute the next round key rows
+    next_key[0] = [
+        key[0][j] ^ left_rotate(key[3])[j] ^ (round_constant if j == 0 else 0)
+        for j in range(4)
+    ]
+    next_key[1] = [key[1][j] ^ next_key[0][j] for j in range(4)]
+    next_key[2] = [key[2][j] ^ next_key[1][j] for j in range(4)]
+    next_key[3] = [key[3][j] ^ next_key[2][j] for j in range(4)]
+
+    return next_key
+
+
+def round_function(state, round_key):
+    """Perform one round of the cipher."""
+    state = gamma(state)
+    state = pi(state)
+    state = mu(state)
+    state = sigma(state, round_key)
+    return state
+
+def inv_round_function(state, round_key):
+    """Perform one round of the inverse cipher."""
+    state = sigma(state, round_key)
+    state = inv_mu(state)
+    state = pi(state)  # π is its own inverse
+    state = inv_gamma(state)
+    return state
+
+def to_matrix(data):
+    """Convert a 16-byte string into a 4x4 matrix."""
+    assert len(data) == 16, "Data must be exactly 16 bytes."
+    return [[data[i * 4 + j] for j in range(4)] for i in range(4)]
+
+def to_bytes(matrix):
+    """Convert a 4x4 matrix back into a 16-byte string."""
+    return bytes(matrix[i][j] for i in range(4) for j in range(4))
+
+def encrypt(plaintext, key):
+    """Encrypt the plaintext."""
+    plaintext = to_matrix(plaintext)
+    key = to_matrix(key)
+    round_keys = [key] + [key_schedule(key, i) for i in range(ROUNDS)]
+
+    # Initial key addition
+    state = sigma(plaintext, round_keys[0])
+
+    # Rounds
+    for i in range(1, ROUNDS + 1):
+        state = round_function(state, round_keys[i])
+
+    return to_bytes(state)
+
+def decrypt(ciphertext, key):
+    """Decrypt the ciphertext."""
+    ciphertext = to_matrix(ciphertext)
+    key = to_matrix(key)
+    round_keys = [key] + [key_schedule(key, i) for i in range(ROUNDS)]
+
+    # Reverse rounds
+    state = ciphertext
+    for i in range(ROUNDS, 0, -1):
+        state = inv_round_function(state, round_keys[i])
+
+    # Final inverse key addition
+    state = sigma(state, round_keys[0])
+
+    return to_bytes(state)
 
 # Example usage
-plaintext = "01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
-ciphertext = encrypt(plaintext)
+plaintext = b"\x01" + b"\x00" * 15  # 16 bytes of plaintext data
+key = b"\x2b\x28\xab\x09\x7e\xae\xf7\xcf\x15\xd2\x15\x4f\x16\xa6\x88\x3c"  # 16 bytes key
+
+print("Plaintext:", plaintext.hex())
+print("Key:", key.hex())
+
+ciphertext = encrypt(plaintext, key)
+print("Ciphertext:", ciphertext.hex())
+
+decrypted = decrypt(ciphertext, key)
+print("Decrypted:", decrypted.hex())
