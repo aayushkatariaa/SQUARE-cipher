@@ -1,6 +1,55 @@
-import pandas as pd
+def differential_uniformity(sbox):
+    """
+    Calculate the differential uniformity of an S-box.
+    Returns the maximum number of output differences for any input difference.
+    """
+    max_uniformity = 0
+    size = len(sbox)
+    
+    # Loop over all possible input differences
+    for delta_x in range(size):
+        # Dictionary to store the count of each output difference
+        output_diffs = [0] * size
+        
+        # Loop over all pairs of inputs (x, x')
+        for x in range(size):
+            x_prime = x ^ delta_x  # x' is the input x XORed with delta_x
+            output_diff = sbox[x] ^ sbox[x_prime]  # Compute output difference
+            output_diffs[output_diff] += 1
+        
+        # The uniformity for this input difference is the max number of occurrences of output differences
+        max_uniformity = max(max_uniformity, max(output_diffs))
+    
+    return max_uniformity
 
-# Example S-box (you should define your own S-box here)
+
+def differential_branch_number(sbox):
+    """
+    Calculate the differential branch number of an S-box.
+    Returns the minimum Hamming weight of the output differences.
+    """
+    size = len(sbox)
+    min_weight = size  # Start with the worst-case value (all bits different)
+
+    # Loop over all pairs of inputs (x, x')
+    for x in range(size):
+        for x_prime in range(size):
+            if x != x_prime:
+                # Compute the output difference Δy
+                delta_y = sbox[x] ^ sbox[x_prime]
+                # Calculate the Hamming weight of the output difference
+                weight = bin(delta_y).count('1')  # Count the number of bits that differ
+                min_weight = min(min_weight, weight)
+    
+    return min_weight
+
+
+def verify_sbox_strength(sbox):
+    """Check the strength of the S-box based on differential uniformity and branch number."""
+    print("S-box Differential Uniformity:", differential_uniformity(sbox))
+    print("S-box Differential Branch Number:", differential_branch_number(sbox))
+
+# Example usage
 sbox = [
     0xc6, 0x37, 0x87, 0x47, 0xdf, 0x46, 0x06, 0xac, 0xf3, 0xe0, 0x86, 0x42, 0x1f, 0x8d, 0x4a, 0x97,
     0x5c, 0xd8, 0x6c, 0x27, 0x5f, 0x65, 0x84, 0xff, 0x2a, 0xbd, 0xda, 0x0a, 0x39, 0xba, 0xd7, 0xfc,
@@ -20,38 +69,4 @@ sbox = [
     0x38, 0xea, 0x68, 0x20, 0x0b, 0x9e, 0xd4, 0x76, 0xe4, 0x69, 0x22, 0x00, 0xfb, 0xb5, 0x4b, 0x91
 ]
 
-size = len(sbox)
-
-# Create 2D array filled with zeroes for DDT
-ddt = [[0] * size for _ in range(size)]
-
-# Generate DDT
-for i in range(size):
-    for u0 in range(size):
-        u1 = u0 ^ i  # Calculate first input difference
-        v0 = sbox[u0]  # Output for first input
-        v1 = sbox[u1]  # Output for second input
-
-        ddt[i][v0 ^ v1] += 1  # Increment the frequency of output difference
-
-# Convert DDT to a pandas DataFrame for better visualization
-ddt_df = pd.DataFrame(ddt)
-
-# Store DDT as a CSV file
-output_file = 'ddt_table.csv'
-ddt_df.to_csv(output_file, index=False)
-
-# Optionally, print the file path if needed
-print(f"DDT table has been stored in {output_file}")
-
-# Count the number of zeroes in the DDT
-def count_zeroes(ddt):
-    return sum(
-        row.count(0) for row in ddt
-    )
-
-# Find the max value in the DDT (excluding the first row and column)
-max_value = max(
-    max(row[1:]) for row in ddt[1:]
-)
-
+verify_sbox_strength(sbox)

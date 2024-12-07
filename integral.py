@@ -129,39 +129,154 @@ def key_schedule(key, round_num):
     return next_key
 
 
+def check_properties(state):
+    """Check all properties (Balanced, Constant, All) for the matrix."""
+    print(f"State matrix: {state}")  # Debugging: Print the state matrix before checking properties
+    balanced = []
+    constant = []
+    all = []
+
+    # Ensure state is 4x4 matrix
+    if len(state) != 4 or len(state[0]) != 4:
+        raise ValueError("State must be a 4x4 matrix.")
+        
+    for j in range(4):
+        for k in range(4):
+            if isBalanced(state, j, k):
+                balanced.append((j, k))
+            if isConstant(state, j, k):
+                constant.append((j, k))
+            if isAll(state, j, k):
+                all.append((j, k))
+
+    return balanced, constant, all
+
+
+def isBalanced(state, j, k):
+    """Check if the difference pattern in the (j,k) element is balanced."""
+    x = 0
+    # Generate multiple states to check for balance
+    for i in range(256):
+        # Simulate how the state might change with different inputs
+        test_state = [[(elem + i) % 256 for elem in row] for row in state]
+        x ^= test_state[j][k]
+    return x == 0
+
+
+def isConstant(state, j, k):
+    """Check if the (j,k) element is constant across all states."""
+    base_value = state[j][k]
+    # Generate multiple states to check for constancy
+    for i in range(256):
+        test_state = [[(elem + i) % 256 for elem in row] for row in state]
+        if test_state[j][k] != base_value:
+            return False
+    return True
+
+
+def isAll(state, j, k):
+    """Check if the (j,k) element contains all values from 0 to 255."""
+    # Generate multiple states to check for range
+    values = set()
+    for i in range(256):
+        test_state = [[(elem + i) % 256 for elem in row] for row in state]
+        values.add(test_state[j][k])
+    return len(values) == 256
+
+
+
 def round_function(state, round_key):
-    """Perform one round of the cipher."""
+    """Perform one round of the cipher with cryptanalysis checks."""
     state = gamma(state)
+    print("\nAfter Gamma:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     state = pi(state)
+    print("\nAfter Pi:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     state = theta(state)
+    print("\nAfter Theta:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     state = sigma(state, round_key)
+    print("\nAfter Sigma:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     return state
 
+
 def inv_round_function(state, round_key):
-    """Perform one round of the inverse cipher."""
+    """Perform one round of the inverse cipher with cryptanalysis checks."""
     state = sigma(state, round_key)
+    print("\nAfter Sigma:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     state = inv_theta(state)
-    state = pi(state)  # π is its own inverse
+    print("\nAfter Inverse Theta:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
+    state = pi(state)
+    print("\nAfter Pi:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     state = inv_gamma(state)
+    print("\nAfter Inverse Gamma:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
+
     return state
+
 
 def to_matrix(data):
     """Convert a 16-byte string into a 4x4 matrix."""
     assert len(data) == 16, "Data must be exactly 16 bytes."
     return [[data[i * 4 + j] for j in range(4)] for i in range(4)]
 
+
 def to_bytes(matrix):
     """Convert a 4x4 matrix back into a 16-byte string."""
     return bytes(matrix[i][j] for i in range(4) for j in range(4))
 
+
+
+
 def encrypt(plaintext, key):
-    """Encrypt the plaintext."""
+    """Encrypt the plaintext with cryptanalysis checks."""
     plaintext = to_matrix(plaintext)
     key = to_matrix(key)
     round_keys = [key] + [key_schedule(key, i) for i in range(ROUNDS)]
 
     # Initial key addition
     state = sigma(plaintext, round_keys[0])
+    print("\nAfter Initial Sigma:")
+    balanced, constant, all = check_properties(state)
+    print(f"Balanced properties: {balanced}")
+    print(f"Constant properties: {constant}")
+    print(f"All properties: {all}")
 
     # Rounds
     for i in range(1, ROUNDS + 1):
@@ -169,8 +284,9 @@ def encrypt(plaintext, key):
 
     return to_bytes(state)
 
+
 def decrypt(ciphertext, key):
-    """Decrypt the ciphertext."""
+    """Decrypt the ciphertext with cryptanalysis checks."""
     ciphertext = to_matrix(ciphertext)
     key = to_matrix(key)
     round_keys = [key] + [key_schedule(key, i) for i in range(ROUNDS)]
@@ -184,6 +300,7 @@ def decrypt(ciphertext, key):
     state = sigma(state, round_keys[0])
 
     return to_bytes(state)
+
 
 # Example usage
 plaintext = b"\x01" + b"\x00" * 15  # 16 bytes of plaintext data
