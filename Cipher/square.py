@@ -1,8 +1,8 @@
 # Constants
 ROUNDS = 8  # Number of rounds
 ROOT = 0x1f5  # Generator of GF(2^8)
-C_X = [0x02, 0x03, 0x01, 0x01]  # Polynomial coefficients for µ
-INV_C_X = [0x0E, 0x09, 0x0D, 0x0B]  # Polynomial coefficients for µ⁻¹
+C_X = [0x02, 0x03, 0x01, 0x01]  # Polynomial coefficients for θ
+INV_C_X = [0x0E, 0x09, 0x0D, 0x0B]  # Polynomial coefficients for θ⁻¹
 ROUND_CONSTANTS = [1 << i for i in range(ROUNDS)]  # Round constants
 
 sbox = [
